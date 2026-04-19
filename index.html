@@ -1,0 +1,104 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Stickman RPG Survival</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <canvas id="gameCanvas"></canvas>
+
+    <!-- UI Overlay -->
+    <div id="ui-layer">
+        
+        <!-- Login Screen -->
+        <div id="login-screen" class="panel">
+            <h1 class="text-blue" style="font-size: 2.5rem; text-align: center; margin-bottom: 20px;">RPG SURVIVAL</h1>
+            <div style="display: flex; flex-direction: column; gap: 15px;">
+                <input type="text" id="login-nickname" placeholder="Nickname" style="padding: 12px; border-radius: 8px; border: 1px solid rgba(255,255,255,0.2); background: rgba(0,0,0,0.5); color: white; font-size: 1.1rem; outline: none;">
+                <input type="password" id="login-password" placeholder="Password" style="padding: 12px; border-radius: 8px; border: 1px solid rgba(255,255,255,0.2); background: rgba(0,0,0,0.5); color: white; font-size: 1.1rem; outline: none;">
+                <button id="login-start-btn" style="background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%); color: white; border: none; padding: 15px; font-size: 1.2rem; font-weight: 800; border-radius: 8px; cursor: pointer; margin-top: 10px;">ENTER GAME</button>
+            </div>
+        </div>
+
+        <!-- HUD (Hidden initially) -->
+        <div id="hud" class="panel hidden">
+            <div class="hud-top">
+                <div class="stat-group">
+                    <span class="label">LEVEL</span>
+                    <span id="player-level" class="value text-blue">1</span>
+                </div>
+                <div class="stat-group">
+                    <span class="label">KILLS</span>
+                    <span id="player-kills" class="value text-red">0</span>
+                </div>
+            </div>
+
+            <div class="bars-container">
+                <!-- HP Bar -->
+                <div class="bar-bg">
+                    <div id="hp-bar" class="bar-fill hp-fill"></div>
+                    <span id="hp-text" class="bar-text">100 / 100</span>
+                </div>
+                
+                <!-- EXP Bar -->
+                <div class="bar-bg">
+                    <div id="exp-bar" class="bar-fill exp-fill"></div>
+                    <span id="exp-text" class="bar-text">0 / 100</span>
+                </div>
+            </div>
+            
+            <div class="stats-grid">
+                <div>DMG: <span id="stat-dmg">20</span></div>
+                <div>SPD: <span id="stat-spd">3</span></div>
+                <div>ATK SPD: <span id="stat-atkspd">1.0</span></div>
+            </div>
+            
+            <button id="settings-btn" style="margin-top: 10px; background: rgba(255,255,255,0.1); border: 1px solid rgba(255,255,255,0.2); color: white; border-radius: 6px; padding: 8px; cursor: pointer; font-weight: bold;">⚙️ Settings</button>
+        </div>
+
+        <!-- Level Up Notification (Hidden) -->
+        <div id="level-up-banner" class="hidden">
+            <h1 class="text-blue">LEVEL UP!</h1>
+            <p>Stats Increased!</p>
+        </div>
+
+        <!-- Death Screen -->
+        <div id="death-screen" class="hidden panel">
+            <h1 class="text-red">YOU DIED</h1>
+            <p>You reached Level <span id="final-level">1</span> with <span id="final-kills">0</span> Kills.</p>
+            <button id="restart-btn">PLAY AGAIN</button>
+            <a href="../index.html" class="back-link">Back to Sandbox</a>
+        </div>
+        
+        <!-- Settings Modal -->
+        <div id="settings-modal" class="hidden panel" style="position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); z-index: 1000; width: 300px; text-align: center;">
+            <h2>Settings</h2>
+            <div style="margin: 20px 0; display: flex; justify-content: space-between; align-items: center;">
+                <span style="font-size: 1.1rem;">Auto Aim</span>
+                <label class="switch">
+                    <input type="checkbox" id="auto-aim-toggle" checked>
+                    <span class="slider round"></span>
+                </label>
+            </div>
+            <button id="close-settings-btn" style="background: #10b981; color: white; border: none; padding: 10px 20px; border-radius: 8px; cursor: pointer; font-weight: bold;">Close</button>
+        </div>
+
+        <!-- Mobile Controls -->
+        <div id="mobile-controls" class="hidden">
+            <div id="joystick-left" class="joystick-zone">
+                <div class="joystick-base"><div class="joystick-stick"></div></div>
+            </div>
+            <div id="joystick-right" class="joystick-zone hidden">
+                <div class="joystick-base"><div class="joystick-stick"></div></div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Scripts -->
+    <script src="rpg_classes.js"></script>
+    <script src="game.js"></script>
+</body>
+</html>
