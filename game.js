@@ -26,20 +26,60 @@ let enemySpawnTimer = 0;
 let nickname = "Player";
 let autoAim = true;
 
+// ─── 닉네임 유효성 검사 함수 ───
+function validateNickname(name) {
+    if (name.length < 2) return '닉네임은 최소 2글자 이상이어야 합니다.';
+    if (name.length > 12) return '닉네임은 12글자 이하여야 합니다.';
+    if (!/^[a-zA-Z0-9가-힣_]+$/.test(name)) return '영문, 숫자, 한글, _만 사용 가능합니다.';
+    return null;
+}
+
+// 이전 닉네임 불러오기
+const savedNickname = localStorage.getItem('rpgSurvival_nickname');
+if (savedNickname) {
+    document.getElementById('login-nickname').value = savedNickname;
+}
+
 // Login Logic
 document.getElementById('login-start-btn').addEventListener('click', () => {
     const nameInput = document.getElementById('login-nickname').value.trim();
-    if (nameInput) nickname = nameInput;
+    const errorEl = document.getElementById('login-error');
+
+    // 유효성 검사
+    const validErr = validateNickname(nameInput);
+    if (validErr) {
+        errorEl.textContent = validErr;
+        return;
+    }
+
+    // 닉네임 중복 체크 (현재 접속 중인 플레이어 목록과 비교 - PartyKit 연동 시 서버에서 처리)
+    const takenNicknames = JSON.parse(localStorage.getItem('rpgSurvival_taken') || '[]');
+    // 이전에 본인이 쓰던 닉네임이면 허용
+    const myOldNickname = localStorage.getItem('rpgSurvival_nickname');
+    if (nameInput !== myOldNickname && takenNicknames.includes(nameInput)) {
+        errorEl.textContent = '이미 사용 중인 닉네임입니다. 다른 닉네임을 선택하세요.';
+        return;
+    }
+
+    errorEl.textContent = '';
+    nickname = nameInput;
+    localStorage.setItem('rpgSurvival_nickname', nickname);
+
     document.getElementById('login-screen').classList.add('hidden');
     document.getElementById('hud').classList.remove('hidden');
-    
-    // Show joysticks if on mobile device (simple check)
+
+    // 모바일 조이스틱 표시
     if ('ontouchstart' in window || navigator.maxTouchPoints > 0) {
         document.getElementById('mobile-controls').classList.remove('hidden');
     }
-    
+
     isPlaying = true;
     loop();
+});
+
+// Enter 키로도 로그인 가능
+document.getElementById('login-nickname').addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') document.getElementById('login-start-btn').click();
 });
 
 // Settings Logic

@@ -16,10 +16,12 @@
         <!-- Login Screen -->
         <div id="login-screen" class="panel">
             <h1 class="text-blue" style="font-size: 2.5rem; text-align: center; margin-bottom: 20px;">RPG SURVIVAL</h1>
+            <p style="text-align:center; color:rgba(255,255,255,0.5); font-size:0.85rem; margin-bottom:10px;">닉네임은 2~12글자, 중복 불가</p>
             <div style="display: flex; flex-direction: column; gap: 15px;">
-                <input type="text" id="login-nickname" placeholder="Nickname" style="padding: 12px; border-radius: 8px; border: 1px solid rgba(255,255,255,0.2); background: rgba(0,0,0,0.5); color: white; font-size: 1.1rem; outline: none;">
-                <input type="password" id="login-password" placeholder="Password" style="padding: 12px; border-radius: 8px; border: 1px solid rgba(255,255,255,0.2); background: rgba(0,0,0,0.5); color: white; font-size: 1.1rem; outline: none;">
-                <button id="login-start-btn" style="background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%); color: white; border: none; padding: 15px; font-size: 1.2rem; font-weight: 800; border-radius: 8px; cursor: pointer; margin-top: 10px;">ENTER GAME</button>
+                <input type="text" id="login-nickname" placeholder="Nickname" maxlength="12"
+                    style="padding: 12px; border-radius: 8px; border: 1px solid rgba(255,255,255,0.2); background: rgba(0,0,0,0.5); color: white; font-size: 1.1rem; outline: none;">
+                <p id="login-error" style="color:#ef4444; font-size:0.9rem; text-align:center; margin:0; min-height:1.2em;"></p>
+                <button id="login-start-btn" style="background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%); color: white; border: none; padding: 15px; font-size: 1.2rem; font-weight: 800; border-radius: 8px; cursor: pointer;">ENTER GAME</button>
             </div>
         </div>
 
