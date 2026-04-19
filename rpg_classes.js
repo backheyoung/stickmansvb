@@ -25,7 +25,7 @@ class RpgProjectile {
         this.angle = Math.atan2(this.vy, this.vx);
     }
 
-    update(enemies) {
+    update(enemies, otherPlayers = {}, myNickname = null) {
         if (!this.active) return;
 
         this.x += this.vx;
@@ -51,6 +51,23 @@ class RpgProjectile {
                     enemy.takeDamage(this.damage);
                     this.active = false;
                     return;
+                }
+            }
+        }
+
+        // Hit other players
+        if (!this.isNetwork) {
+            for (let key in otherPlayers) {
+                let op = otherPlayers[key];
+                if (op.isAlive && key !== myNickname) {
+                    const dist = Math.hypot(op.x - this.x, op.y - this.y);
+                    if (dist < 16 + this.radius) { // Player radius is 16
+                        if (window.onHitOtherPlayer) {
+                            window.onHitOtherPlayer(key, this.damage);
+                        }
+                        this.active = false;
+                        return;
+                    }
                 }
             }
         }
@@ -266,11 +283,33 @@ class RpgPlayer {
             }
 
             if (shouldShoot && targetX !== null && targetY !== null) {
-                projectiles.push(new RpgProjectile(this.x, this.y, targetX, targetY, this.damage));
                 this.cooldownTimer = this.attackCooldown;
                 // Update mouse proxy for drawing facing direction
                 this.mouseX = targetX - cameraX;
                 this.mouseY = targetY - cameraY;
+                
+                // Melee Hit Logic
+                const aimAngle = Math.atan2(targetY - this.y, targetX - this.x);
+                const meleeRange = this.radius + 40;
+                const hitAngle = Math.PI / 1.5; // 120 degree cone for easier hitting
+                
+                // Hit enemies
+                for (let e of enemies) {
+                    if (!e.isAlive) continue;
+                    const dist = Math.hypot(e.x - this.x, e.y - this.y);
+                    if (dist <= meleeRange + e.radius) {
+                        const angleToEnemy = Math.atan2(e.y - this.y, e.x - this.x);
+                        let angleDiff = Math.abs(aimAngle - angleToEnemy);
+                        if (angleDiff > Math.PI) angleDiff = Math.PI * 2 - angleDiff;
+                        if (angleDiff <= hitAngle / 2) {
+                            e.takeDamage(this.damage);
+                        }
+                    }
+                }
+                
+                if (window.onLocalAttack) {
+                    window.onLocalAttack(this.x, this.y, aimAngle, this.damage);
+                }
             }
         }
     }
@@ -314,25 +353,47 @@ class RpgPlayer {
         ctx.lineTo(6 * s, 16 * s - legOffset);
         ctx.stroke();
 
-        // Arms holding a bow-like shape
+        // Arms
         ctx.beginPath();
         ctx.moveTo(0, 2 * s);
-        ctx.lineTo(8 * s, 0);
+        ctx.lineTo(6 * s, 0); // right arm
+        ctx.moveTo(0, 2 * s);
+        ctx.lineTo(-4 * s, 4 * s); // left arm idle
         ctx.stroke();
 
-        ctx.beginPath();
-        ctx.arc(8 * s, 0, 10 * s, -Math.PI/2, Math.PI/2);
-        ctx.strokeStyle = '#e2e8f0';
-        ctx.stroke();
-
-        let pullX = 0;
-        if (this.cooldownTimer < this.attackCooldown * 0.3) pullX = -5 * s;
+        // Sword
+        ctx.save();
+        ctx.translate(6 * s, 0); // attach to right hand
         
+        let swingAngle = -Math.PI / 4; // Idle angle
+        const swingTime = this.attackCooldown * 0.4;
+        
+        if (this.cooldownTimer > this.attackCooldown - swingTime) {
+            const progress = 1 - (this.attackCooldown - this.cooldownTimer) / swingTime;
+            // Swing from -PI/4 to PI/2
+            swingAngle = -Math.PI/4 + (Math.PI * 0.75) * (1 - progress);
+        }
+
+        // Adjust for drawing direction
+        ctx.rotate(swingAngle - Math.PI/2); // Align sword to point outward
+
+        // Draw Blade
         ctx.beginPath();
-        ctx.moveTo(0, 2 * s);
-        ctx.lineTo(pullX, 0);
-        ctx.strokeStyle = this.color;
+        ctx.moveTo(0, 0);
+        ctx.lineTo(18 * s, 0);
+        ctx.lineWidth = 3;
+        ctx.strokeStyle = '#cbd5e1'; // Silver blade
         ctx.stroke();
+        
+        // Draw Hilt (Crossguard)
+        ctx.beginPath();
+        ctx.moveTo(3 * s, -3 * s);
+        ctx.lineTo(3 * s, 3 * s);
+        ctx.lineWidth = 3;
+        ctx.strokeStyle = '#b45309'; // Brown guard
+        ctx.stroke();
+        
+        ctx.restore();
 
         ctx.restore();
     }
