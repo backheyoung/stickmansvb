@@ -138,6 +138,112 @@ class ExpGem {
     }
 }
 
+// ── Resource Nodes ───────────────────────────────────────────
+// Stationary orbs scattered across the map. Attack them to get EXP.
+class ResourceNode {
+    constructor(x, y, tier = 1) {
+        this.x = x;
+        this.y = y;
+        this.tier = tier; // 1 = common, 2 = rare, 3 = epic
+
+        // Tier-based stats
+        const tierData = [
+            { radius: 22, maxHp: 80,  expValue: 30,  color: '#6ee7b7', glow: '#10b981' },
+            { radius: 28, maxHp: 200, expValue: 100, color: '#93c5fd', glow: '#3b82f6' },
+            { radius: 36, maxHp: 500, expValue: 300, color: '#d8b4fe', glow: '#8b5cf6' },
+        ];
+        const td = tierData[Math.min(tier - 1, 2)];
+        this.radius   = td.radius;
+        this.maxHp    = td.maxHp;
+        this.hp       = this.maxHp;
+        this.expValue = td.expValue;
+        this.color    = td.color;
+        this.glow     = td.glow;
+
+        this.isAlive     = true;
+        this.pulseTimer  = Math.random() * Math.PI * 2;
+        this.hitFlash    = 0;
+        this.respawnTimer = 0;
+    }
+
+    takeDamage(amount) {
+        if (!this.isAlive) return;
+        this.hp -= amount;
+        this.hitFlash = 8;
+        if (this.hp <= 0) {
+            this.hp = 0;
+            this.isAlive = false;
+            this.respawnTimer = 600;
+        }
+    }
+
+    update() {
+        this.pulseTimer += 0.04;
+        if (this.hitFlash > 0) this.hitFlash--;
+        if (!this.isAlive) {
+            this.respawnTimer--;
+            if (this.respawnTimer <= 0) {
+                this.isAlive = true;
+                this.hp = this.maxHp;
+            }
+        }
+    }
+
+    draw(ctx) {
+        const pulse = Math.sin(this.pulseTimer) * 0.15 + 1;
+        ctx.save();
+        ctx.translate(this.x, this.y);
+
+        if (!this.isAlive) {
+            ctx.globalAlpha = 0.2;
+            ctx.strokeStyle = this.color;
+            ctx.lineWidth = 2;
+            ctx.beginPath();
+            ctx.arc(0, 0, this.radius, 0, Math.PI * 2);
+            ctx.stroke();
+            ctx.globalAlpha = 1;
+            ctx.restore();
+            return;
+        }
+
+        ctx.shadowColor = this.hitFlash > 0 ? '#ffffff' : this.glow;
+        ctx.shadowBlur  = 20 * pulse;
+
+        ctx.strokeStyle = this.hitFlash > 0 ? '#ffffff' : this.color;
+        ctx.lineWidth = 3;
+        ctx.beginPath();
+        ctx.arc(0, 0, this.radius * pulse, 0, Math.PI * 2);
+        ctx.stroke();
+
+        ctx.fillStyle = this.hitFlash > 0 ? 'rgba(255,255,255,0.5)' : `${this.color}55`;
+        ctx.fill();
+
+        ctx.shadowBlur = 0;
+        ctx.strokeStyle = this.hitFlash > 0 ? '#fff' : this.glow;
+        ctx.lineWidth = 2;
+        const r2 = this.radius * 0.55;
+        ctx.beginPath();
+        ctx.moveTo(-r2, 0); ctx.lineTo(r2, 0);
+        ctx.moveTo(0, -r2); ctx.lineTo(0, r2);
+        ctx.stroke();
+        ctx.restore();
+
+        // HP bar when damaged
+        if (this.hp < this.maxHp) {
+            ctx.save();
+            ctx.translate(this.x, this.y);
+            const barW = this.radius * 2;
+            const barY = -this.radius - 10;
+            ctx.fillStyle = 'rgba(0,0,0,0.6)';
+            ctx.fillRect(-barW/2, barY, barW, 5);
+            ctx.fillStyle = this.glow;
+            ctx.fillRect(-barW/2, barY, barW * (this.hp / this.maxHp), 5);
+            ctx.restore();
+        }
+    }
+}
+
+
 class RpgPlayer {
     constructor(x, y) {
         this.x = x;
@@ -284,25 +390,33 @@ class RpgPlayer {
 
             if (shouldShoot && targetX !== null && targetY !== null) {
                 this.cooldownTimer = this.attackCooldown;
-                // Update mouse proxy for drawing facing direction
                 this.mouseX = targetX - cameraX;
                 this.mouseY = targetY - cameraY;
                 
                 // Melee Hit Logic
                 const aimAngle = Math.atan2(targetY - this.y, targetX - this.x);
-                const meleeRange = this.radius + 40;
-                const hitAngle = Math.PI / 1.5; // 120 degree cone for easier hitting
-                
-                // Hit enemies
-                for (let e of enemies) {
-                    if (!e.isAlive) continue;
-                    const dist = Math.hypot(e.x - this.x, e.y - this.y);
-                    if (dist <= meleeRange + e.radius) {
-                        const angleToEnemy = Math.atan2(e.y - this.y, e.x - this.x);
-                        let angleDiff = Math.abs(aimAngle - angleToEnemy);
-                        if (angleDiff > Math.PI) angleDiff = Math.PI * 2 - angleDiff;
-                        if (angleDiff <= hitAngle / 2) {
-                            e.takeDamage(this.damage);
+                const meleeRange = this.radius + 50;
+                const hitAngle = Math.PI / 1.5; // 120 degree cone
+
+                // Hit resource nodes
+                if (window.resourceNodes) {
+                    for (let node of window.resourceNodes) {
+                        if (!node.isAlive) continue;
+                        const dist = Math.hypot(node.x - this.x, node.y - this.y);
+                        if (dist <= meleeRange + node.radius) {
+                            const angleToNode = Math.atan2(node.y - this.y, node.x - this.x);
+                            let angleDiff = Math.abs(aimAngle - angleToNode);
+                            if (angleDiff > Math.PI) angleDiff = Math.PI * 2 - angleDiff;
+                            if (angleDiff <= hitAngle / 2) {
+                                node.takeDamage(this.damage);
+                                if (!node.isAlive && node.expValue > 0) {
+                                    // Drop exp gems
+                                    if (window.gems) {
+                                        window.gems.push(new ExpGem(node.x, node.y, node.expValue));
+                                    }
+                                    this.kills++;
+                                }
+                            }
                         }
                     }
                 }

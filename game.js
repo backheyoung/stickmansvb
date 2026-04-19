@@ -11,19 +11,20 @@ function resize() {
 window.addEventListener('resize', resize);
 resize();
 
-window.WORLD_WIDTH = 4000;
-window.WORLD_HEIGHT = 4000;
+window.WORLD_WIDTH = 10000;
+window.WORLD_HEIGHT = 10000;
 
 let camera = { x: 0, y: 0 };
 let player = new RpgPlayer(window.WORLD_WIDTH / 2, window.WORLD_HEIGHT / 2);
-let enemies = [];
+let resourceNodes = []; // Replaces enemies
+window.resourceNodes = resourceNodes;
 let projectiles = [];
 let gems = [];
+window.gems = gems;
 
-let isPlaying = false; // Start false, wait for login
+let isPlaying = false;
 let animationId;
-let enemySpawnTimer = 0;
-let nickname = "Player";
+let nickname = 'Player';
 let autoAim = true;
 
 // --- Firebase Initialization ---
@@ -50,7 +51,9 @@ const appStartTime = Date.now();
 
 // --- Portals ---
 let portals = [
-    { id: 'battlefield1', name: '초보자 사냥터 (테스트)', x: window.WORLD_WIDTH/2, y: window.WORLD_HEIGHT/2 - 300, radius: 80, targetZone: 'battlefield1', limit: 20, count: 0 }
+    { id: 'battlefield1', name: 'Beginner Grounds', x: window.WORLD_WIDTH/2, y: window.WORLD_HEIGHT/2 - 600, radius: 80, targetZone: 'battlefield1', limit: 20, count: 0 },
+    { id: 'battlefield2', name: 'Warrior Arena', x: window.WORLD_WIDTH/2 + 500, y: window.WORLD_HEIGHT/2 + 200, radius: 80, targetZone: 'battlefield2', limit: 20, count: 0 },
+    { id: 'battlefield3', name: 'Death Valley', x: window.WORLD_WIDTH/2 - 500, y: window.WORLD_HEIGHT/2 + 200, radius: 80, targetZone: 'battlefield3', limit: 20, count: 0 }
 ];
 let portalCountListener = null;
 
@@ -116,15 +119,15 @@ window.onLocalAttack = (x, y, angle, dmg) => {
 };
 
 
-// ─── 닉네임 유효성 검사 함수 ───
+// --- Nickname Validation ---
 function validateNickname(name) {
-    if (name.length < 2) return '닉네임은 최소 2글자 이상이어야 합니다.';
-    if (name.length > 12) return '닉네임은 12글자 이하여야 합니다.';
-    if (!/^[a-zA-Z0-9가-힣_]+$/.test(name)) return '영문, 숫자, 한글, _만 사용 가능합니다.';
+    if (name.length < 2) return 'Nickname must be at least 2 characters.';
+    if (name.length > 12) return 'Nickname must be 12 characters or fewer.';
+    if (!/^[a-zA-Z0-9가-힣_]+$/.test(name)) return 'Only letters, numbers and _ are allowed.';
     return null;
 }
 
-// 이전 닉네임 불러오기
+// Load saved nickname
 const savedNickname = localStorage.getItem('rpgSurvival_nickname');
 if (savedNickname) {
     document.getElementById('login-nickname').value = savedNickname;
@@ -135,7 +138,7 @@ document.getElementById('login-start-btn').addEventListener('click', () => {
     const nameInput = document.getElementById('login-nickname').value.trim();
     const errorEl = document.getElementById('login-error');
 
-    // 유효성 검사
+    // Validation
     const validErr = validateNickname(nameInput);
     if (validErr) {
         errorEl.textContent = validErr;
@@ -145,7 +148,7 @@ document.getElementById('login-start-btn').addEventListener('click', () => {
     // Check duplicate from Firebase
     database.ref(currentZone + '/players/' + nameInput).once('value').then(snap => {
         if (snap.exists() && snap.val().active) {
-            errorEl.textContent = '이미 사용 중이거나 접속 중인 닉네임입니다.';
+            errorEl.textContent = 'Nickname is already in use. Please try another.';
             return;
         }
 
@@ -170,12 +173,12 @@ document.getElementById('login-start-btn').addEventListener('click', () => {
         isPlaying = true;
         loop();
     }).catch(err => {
-        errorEl.textContent = '데이터베이스 연결 오류가 발생했습니다.';
+        errorEl.textContent = 'Database connection error. Please try again.';
         console.error(err);
     });
 });
 
-// Enter 키로도 로그인 가능
+// Press Enter to login
 document.getElementById('login-nickname').addEventListener('keydown', (e) => {
     if (e.key === 'Enter') document.getElementById('login-start-btn').click();
 });
@@ -340,10 +343,11 @@ function drawMinimap(ctx) {
     ctx.strokeStyle = 'rgba(255, 255, 255, 0.2)';
     ctx.strokeRect(mmX + camera.x * scaleX, mmY + camera.y * scaleY, width * scaleX, height * scaleY);
 
-    // Enemies
-    ctx.fillStyle = '#ef4444';
-    for (let e of enemies) {
-        ctx.fillRect(mmX + e.x * scaleX - 1, mmY + e.y * scaleY - 1, 2, 2);
+    // Resource Nodes on minimap (green/blue/purple dots)
+    for (let node of resourceNodes) {
+        if (!node.isAlive) continue;
+        ctx.fillStyle = node.glow;
+        ctx.fillRect(mmX + node.x * scaleX - 1, mmY + node.y * scaleY - 1, 2, 2);
     }
 
     // Other Players
@@ -381,16 +385,31 @@ function updateHUD() {
     document.getElementById('stat-atkspd').innerText = atkSpd;
 }
 
-function spawnEnemy() {
-    const angle = Math.random() * Math.PI * 2;
-    const dist = 600 + Math.random() * 200; // Spawn outside screen
-    let ex = player.x + Math.cos(angle) * dist;
-    let ey = player.y + Math.sin(angle) * dist;
-    
-    ex = Math.max(0, Math.min(window.WORLD_WIDTH, ex));
-    ey = Math.max(0, Math.min(window.WORLD_HEIGHT, ey));
+// Spawn resource nodes across the world (called once on game start)
+function spawnResourceNodes() {
+    resourceNodes = [];
+    const W = window.WORLD_WIDTH;
+    const H = window.WORLD_HEIGHT;
+    const margin = 300;
 
-    enemies.push(new RpgEnemy(ex, ey, player.level));
+    // Common nodes (tier 1) – 80 spread evenly
+    for (let i = 0; i < 80; i++) {
+        const x = margin + Math.random() * (W - margin * 2);
+        const y = margin + Math.random() * (H - margin * 2);
+        resourceNodes.push(new ResourceNode(x, y, 1));
+    }
+    // Rare nodes (tier 2) – 30
+    for (let i = 0; i < 30; i++) {
+        const x = margin + Math.random() * (W - margin * 2);
+        const y = margin + Math.random() * (H - margin * 2);
+        resourceNodes.push(new ResourceNode(x, y, 2));
+    }
+    // Epic nodes (tier 3) – 10
+    for (let i = 0; i < 10; i++) {
+        const x = margin + Math.random() * (W - margin * 2);
+        const y = margin + Math.random() * (H - margin * 2);
+        resourceNodes.push(new ResourceNode(x, y, 3));
+    }
 }
 
 function handleDeath() {
@@ -630,7 +649,7 @@ function drawPortals(ctx) {
         ctx.fillStyle = 'white';
         ctx.font = 'bold 16px Inter';
         ctx.textAlign = 'center';
-        ctx.fillText("마을로 귀환", 0, -rRadius - 10);
+        ctx.fillText('Return to Village', 0, -rRadius - 10);
         ctx.restore();
     }
 }
@@ -726,7 +745,6 @@ function loop() {
                 }
             }
         });
-        enemies = []; // No enemies in village
     } else {
         // Return Portal Logic in Battlefield
         const rx = window.WORLD_WIDTH / 2;
@@ -735,28 +753,24 @@ function loop() {
         if (dist < player.radius + 80 && !player.isTeleporting) {
             teleportToZone('village', null);
         }
-
-        enemySpawnTimer++;
-        // Spawn rate increases with level
-        const spawnRate = Math.max(20, 100 - player.level * 5);
-        if (enemySpawnTimer > spawnRate && player.isAlive) {
-            spawnEnemy();
-            enemySpawnTimer = 0;
-        }
     }
 
-    projectiles.forEach(p => p.update(enemies, otherPlayers, nickname));
+    projectiles.forEach(p => p.update([], otherPlayers, nickname));
     projectiles = projectiles.filter(p => p.active);
 
-    enemies.forEach(e => {
-        if (player.isAlive) e.update(player);
-        if (!e.isAlive && e.hp <= 0 && e.expValue > 0) {
-            gems.push(new ExpGem(e.x, e.y, e.expValue));
-            player.kills++;
-            e.expValue = 0;
+    // Update ResourceNodes and handle melee hits
+    resourceNodes.forEach(node => {
+        node.update();
+        if (node.isAlive && player.isAlive) {
+            const dist = Math.hypot(player.x - node.x, player.y - node.y);
+            if (dist < player.radius + node.radius + 40) {
+                // Melee hit is handled in RpgPlayer.update via onNodeInRange callback
+                if (window.meleeHitNodes && window.meleeHitNodes.indexOf(node) === -1) {
+                    window.meleeHitNodes.push(node);
+                }
+            }
         }
     });
-    enemies = enemies.filter(e => e.isAlive);
 
     if (player.isAlive) {
         gems.forEach(g => g.update(player));
@@ -787,33 +801,15 @@ function loop() {
     
     drawGrid(ctx);
     
-    // Draw Network Gems
-    for (let key in networkGems) {
-        let ng = networkGems[key];
-        if (ng && ng.active) {
-            ctx.save();
-            ctx.translate(ng.x, ng.y + Math.sin(Date.now()/200) * 3);
-            ctx.fillStyle = '#f59e0b'; // Gold for network gems
-            ctx.shadowColor = '#d97706';
-            ctx.shadowBlur = 10;
-            ctx.beginPath();
-            ctx.moveTo(0, -6);
-            ctx.lineTo(6, 0);
-            ctx.lineTo(0, 6);
-            ctx.lineTo(-6, 0);
-            ctx.closePath();
-            ctx.fill();
-            ctx.restore();
-        }
-    }
+    // Draw Resource Nodes
+    resourceNodes.forEach(n => n.draw(ctx));
+
+    gems.forEach(g => g.draw(ctx));
+    projectiles.forEach(p => p.draw(ctx));
 
     // Draw Portals
     drawPortals(ctx);
 
-    gems.forEach(g => g.draw(ctx));
-    projectiles.forEach(p => p.draw(ctx));
-    enemies.forEach(e => e.draw(ctx));
-    
     // Draw Other Players
     for (let key in otherPlayers) {
         if (key === nickname) continue;
@@ -822,23 +818,23 @@ function loop() {
 
     if (player.isAlive) {
         player.draw(ctx, camera.x, camera.y);
-        // Draw Nickname
         ctx.fillStyle = 'white';
         ctx.font = 'bold 12px Inter';
         ctx.textAlign = 'center';
         ctx.fillText(nickname, player.x, player.y - player.radius - 15);
     }
     
-    // (Removed duplicate Nickname draw)
-    
     ctx.restore();
 
-    // Draw minimap on top of everything (UI coordinates)
+    // Draw minimap
     drawMinimap(ctx);
 
     animationId = requestAnimationFrame(loop);
 }
 
-// Start immediately with empty canvas, game loop won't run logic until isPlaying is true
+// Initialize resource nodes and draw empty canvas
+spawnResourceNodes();
+window.resourceNodes = resourceNodes; // keep global ref updated
 ctx.clearRect(0, 0, width, height);
 drawGrid(ctx);
+
